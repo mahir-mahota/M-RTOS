@@ -22,8 +22,8 @@ void osKernelInitialize (void) {
 	for (uint8_t i = 0; i < TOTAL_STACKS; i++) {
 		threads[i].sp = NULL;
 		threads[i].thread_function = NULL;
-		uint32_t timeslice = 0x0;
-		uint32_t runtime = timeslice;
+		threads[i].timeslice = 0x0;
+		threads[i].runtime = 0x0;
 	}
 	curr_thread = 0;
 	total_threads = 0;
@@ -52,6 +52,8 @@ bool osCreateThreadWithDeadline (void (*thread_function)(void* args), void* args
 		return false;
 	}
 
+	__disable_irq(); //Enter critical section
+
 	*(--stackptr) = 1 << 24; //xPSR
 	*(--stackptr) = (uint32_t)thread_function; //PC
 	for (uint8_t  i = 0; i < 14; i++) {
@@ -69,11 +71,9 @@ bool osCreateThreadWithDeadline (void (*thread_function)(void* args), void* args
 	threads[total_threads].runtime = deadline;
 	total_threads++;
 
-	return true;
-}
+	__enable_irq(); //Exit critical section
 
-void osKernelStart (void) {
-	__asm("SVC #1");
+	return true;
 }
 
 void osSched(void){
@@ -83,27 +83,31 @@ void osSched(void){
 	__set_PSP((uint32_t)threads[curr_thread].sp);
 }
 
+void osKernelStart (void) {
+	__asm("SVC #1");
+}
+
 void osYield(void) {
 	__asm("SVC #2");
 }
 
-void SVC_Handler_Main(unsigned int *svc_args)
-{
+void SVC_Handler_Main(unsigned int *svc_args) {
 	unsigned int svc_number;
 	/*
 	* Stack contains:
 	* r0, r1, r2, r3, r12, r14, the return address and xPSR
 	* First argument (r0) is svc_args[0]
 	*/
-	svc_number = ( ( char * )svc_args[ 6 ] )[ -2 ] ;
-	switch( svc_number )
-	{
+	svc_number = ((char *)svc_args[6])[-2];
+	switch(svc_number) {
 		case 1:
 			__set_PSP((uint32_t)threads[curr_thread].sp);
 			runFirstThread();
+			break;
 		case 2:
 			_ICSR |= 1 << 28;
 			__asm("isb");
+			break;
 		default: /* unknown SVC */
 			break;
 	}
