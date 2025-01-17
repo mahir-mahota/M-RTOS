@@ -24,6 +24,7 @@ void osKernelInitialize (void) {
 		threads[i].thread_function = NULL;
 		threads[i].timeslice = 0x0;
 		threads[i].runtime = 0x0;
+		threads[i].priority = 0x0;
 	}
 	curr_thread = 0;
 	total_threads = 0;
